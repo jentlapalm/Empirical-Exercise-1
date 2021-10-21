@@ -1,0 +1,139 @@
+---
+title: 'Social Network Analytics Empirical Exercise #1'
+output:
+  html_document: default
+  pdf_document: default
+---
+Jent LaPalm
+
+```{r, warning=FALSE, message=FALSE}
+library(igraph)
+library(data.table)
+path <- "https://raw.githubusercontent.com/jentlapalm/Empirical-Exercise-1/main/social_and_task_network.csv"
+data = fread(path, header = TRUE)
+```
+
+```{r}
+# make adjacency matrix, subset to just the non-zero answers
+nonzero_edges = data[social_tie > 0 | task_tie > 0]
+full_network = graph.data.frame(nonzero_edges)
+plot(full_network)
+```
+```{r}
+#removing edges where there is no social tie to get social network
+network_social = delete.edges(full_network, E(full_network)[get.edge.attribute(full_network,name = "social_tie")==0])
+plot(network_social)
+```
+```{r}
+#removing edges where there is no task tie to get task network
+network_task = delete.edges(full_network, E(full_network)[get.edge.attribute(full_network,name = "task_tie")==0])
+plot(network_task)
+```
+***
+1. First, consider the social and task ties as two separate networks.
+(A) Use igraph to generate indegree, outdegree, closeness, betweenness, and 
+PageRank centrality statistics for each individual the social and task networks.
+***
+
+```{r, warning=FALSE}
+#Social Network Calculations
+degree(network_social, mode='in') #indegree
+
+degree(network_social,mode='out') #outdegree
+
+closeness(network_social) #closeness
+
+betweenness(network_social) #betweenness
+
+#removing those with no ties for centrality computations
+cnetwork_social = delete.vertices(network_social, V(network_social)[degree(network_social)==0])
+page_rank(cnetwork_social)#pagerank
+```
+```{r, warning=FALSE}
+#Task Network Calculations
+degree(network_task, mode='in') #indegree
+
+degree(network_task,mode='out') #outdegree
+
+closeness(network_task)#closeness
+
+betweenness(network_task)#betweenness
+
+#removing those with no ties for centrality computations
+cnetwork_task = delete.vertices(network_task, V(network_task)[degree(network_task)==0])
+page_rank(cnetwork_task)#page rank
+```
+***
+(B) Compute the correlations of the five centrality measures you generate for the social
+network with the five measures generated for the task network. Which measures in the
+task network are most closely related to those in the socializing network? Name at least
+one insight can you draw from the relationships between these five measures across the
+two networks.
+***
+```{r warning=FALSE}
+getNetStats=function(net)
+{
+  indegree = degree(net, mode = "in")
+  outdegree = degree(net, mode='out')
+  close = closeness(net)
+  between = betweenness(net)
+  page_rank = page_rank(net)
+  name=V(net)$name
+  stats=as.data.table(list(name = name, indegree = indegree, outdegree=outdegree, 
+                           close = close, between = between, page_rank=page_rank$vector))
+  return(stats)
+}
+
+social_table <- getNetStats(network_social)
+task_table <- getNetStats(network_task)
+colnames(social_table) <- paste('social', colnames(social_table), sep=' ')
+colnames(task_table) <- paste('task', colnames(task_table), sep=' ')
+
+
+cor(social_table[,-1],task_table[,-1])
+
+```
+***
+Commentary: 
+The highest correlated metric between both networks is betweenness. This suggests that people in this network who are effective social bridges also function as effective task bridges. This matches my lived experience of networks, where socializing and collaborating often intertwine. Another interesting result is the near-zero correlation between social page_rank and task closeness. This may, however, be because our network is not fully connected, resulting in issues with both the path of the 'random surfer' in the page rank algorithm and the measure of closeness.
+
+***
+***
+2. Next, consider the social and task ties together, as two distinct types of ties comprising
+one network. Suppose that a tie is strong if it is above the mean strength for that type,
+conditional on the tie existing—that is, do not include weights of 0 in the calculation of the
+mean.
+(A) Under this definition, does the network satisfy Strong Triadic Closure? Come up with
+a solution that illustrates this visually, in a plot.
+***
+(B) Also come up with a solution that illustrates this programmatically, such as by giving
+the number or proportion of ties that are in violation of Strong Triadic Closure.
+***
+***
+3. Continue to treat the social and task ties as two distinct types of ties comprising one network.
+(A) It is also possible to compute betweenness on the edges in a network, as well as the
+vertices. This is a good measure of the flow of information and resources through a
+network. Calculate the edge-level betweenness for both the social and task ties.
+***
+***
+(B) Does it seem like edges with high betweenness tend to be strong or weak ties, according
+the measure of tie strength we used in Question 2? Does this result make sense given
+the shape of the networks?
+***
+***
+4. Continue to treat the social and task ties as two distinct types of ties comprising one network.
+How many pairs of nodes do not have walks between one another? Find a solution that
+performs this calculation directly on the matrix—it is possible to verify this solution via
+igraph afterward using distances(). See also ?distances() for an explanation of igraph’s
+related network distance functions.
+***
+***
+5. The network-level measure of degree centrality is a good indicator of the dispersion of the
+degree distribution in a network. Generate and plot a network in R in which the network-level
+measure of degree centrality,
+
+Cdegree =∑Cdegree(v^∗)−Cdegree(vi)/(n−1)(n−2)
+
+is equal to 1, and another where it is equal to 0. Would this relationship hold true for these
+networks for other measures of centrality, such as closeness or betweenness?
+***
