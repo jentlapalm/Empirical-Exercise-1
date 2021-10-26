@@ -9,6 +9,11 @@ Jent LaPalm
 ```{r, warning=FALSE, message=FALSE}
 library(igraph)
 library(data.table)
+library(randtests)
+library(stringr)
+library(Matrix)
+library(expm)
+
 path <- "https://raw.githubusercontent.com/jentlapalm/Empirical-Exercise-1/main/social_and_task_network.csv"
 data = fread(path, header = TRUE)
 ```
@@ -94,7 +99,7 @@ cor(social_table[,-1],task_table[,-1])
 
 ```
 ***
-Commentary: 
+1(B) Commentary: 
 The highest correlated metric between both networks is betweenness. This suggests that people in this network who are effective social bridges also function as effective task bridges. This matches my lived experience of networks, where socializing and collaborating often intertwine. Another interesting result is the near-zero correlation between social page_rank and task closeness. This may, however, be because our network is not fully connected, resulting in issues with both the path of the 'random surfer' in the page rank algorithm and the measure of closeness.
 
 ***
@@ -106,8 +111,58 @@ mean.
 (A) Under this definition, does the network satisfy Strong Triadic Closure? Come up with
 a solution that illustrates this visually, in a plot.
 ***
+```{r}
+# mean social tie, zero-values excluded
+smean <- mean(E(full_network)$social_tie[E(full_network)$social_tie!=0])
+
+# mean task tie, zero-values excluded
+tmean <- mean(E(full_network)$task_tie[E(full_network)$task_tie!=0])
+
+#function from Stack Overflow to space nodes properly
+
+plot(full_network, edge.color=ifelse(E(full_network)$social_tie>smean, rgb(1, 0, 0.2, 1), rgb(0,0.4,1,0.5)),  layout=layout_with_kk, edge.arrow.size = 0.5)
+plot(full_network, edge.color=ifelse(E(full_network)$task_tie>tmean, rgb(.4, 0, 0.6, 1), rgb(0.3,0.3,0,0.5)),layout=layout_with_kk, edge.arrow.size = 0.5, add=TRUE)
+```
+***
+2(A) Commentary:
+In strong triadic closure, if there is a strong tie from one vertex to two other vertices, those 'other vertices' should also be connected. 
+In the above plot, red represents strong social ties, and purple represents strong task ties. We can see vertex 19 has strong ties to 20 and 16, however, these nodes are not directly connected, which could the network violates strong triadic closure, however, in this case, 18 functions as a local bridge using weak ties to connect 20 and 16.
+***
 (B) Also come up with a solution that illustrates this programmatically, such as by giving
 the number or proportion of ties that are in violation of Strong Triadic Closure.
+***
+```{r}
+# creating df to check strong triadic closure
+stc_df <- data.frame(nonzero_edges)
+# creating strong and weak binary columns for each tie type
+stc_df$soc_strong <- rep(0,length(stc_df$social_tie))
+stc_df$soc_weak <- rep(0,length(stc_df$social_tie))
+stc_df$task_strong <- rep(0,length(stc_df$task_tie))
+stc_df$task_weak <- rep(0,length(stc_df$task_tie))
+
+for (i in 1:length(stc_df$social_tie)){
+  ifelse (stc_df$social_tie[i]>smean, stc_df$soc_strong[i] <- 1, stc_df$soc_weak[i] <- 1)
+  ifelse (stc_df$task_tie[i]>tmean, stc_df$task_strong[i] <- 1, stc_df$task_weak[i] <- 1)
+}
+```
+```{r}
+# looping to check for strong closure
+for (i in 1:22){
+  strong_ego <- stc_df[which(stc_df$ego==i & (stc_df$soc_strong==1 | stc_df$task_strong==1)),]
+  if (nrow(strong_ego)>1){
+  ties <- as.vector(strong_ego$alter)
+  perm_ties <- permut(ties,m=2)
+    for (i in 1:nrow(perm_ties)) {
+      vec <- as.vector(perm_ties[i,])
+      index <- stc_df[which(stc_df$ego==vec[1] & stc_df$alter==vec[2]),]
+      if(nrow(index)==0){print(c('ego',strong_ego$ego[1],'alter',vec[1],vec[2]))}
+  }
+  }
+}
+```
+***
+2(B). Commentary: 
+Here we see the 12 ego->alter1 ego->alter2 groups where there is no alter1<->alter2 tie, thus violating strong triadic closure. These represent roughly 15% of our dataset of nonzero edges.
 ***
 ***
 3. Continue to treat the social and task ties as two distinct types of ties comprising one network.
@@ -115,11 +170,62 @@ the number or proportion of ties that are in violation of Strong Triadic Closure
 vertices. This is a good measure of the flow of information and resources through a
 network. Calculate the edge-level betweenness for both the social and task ties.
 ***
+```{r, warning=FALSE, message=FALSE, include=FALSE}
+# social network betweenness
+btw <- suppressMessages(
+  cluster_edge_betweenness(network_social, E(network_social)$weight, directed=TRUE, edge.betweenness = TRUE,
+                           modularity=FALSE))
+btw_social_dt <- as.data.table(cbind(btw$removed.edges,btw$edge.betweenness))
+colnames(btw_social_dt) <-  c('edge number', 'betweenness') 
+```
+```{r}
+btw_social_dt
+```
+```{r, warning=FALSE, message=FALSE, include=FALSE}
+# task network betweenness
+btw2 <- suppressMessages(
+  cluster_edge_betweenness(network_task, E(network_task)$weight, directed=TRUE, edge.betweenness = TRUE,
+                           modularity=FALSE))
+btw_task_dt <- as.data.table(cbind(btw2$removed.edges,btw2$edge.betweenness))
+colnames(btw_task_dt) <-  c('edge number', 'betweenness') 
+```
+```{r}
+setorder(btw_task_dt, -betweenness)
+btw_task_dt
+```
 ***
 (B) Does it seem like edges with high betweenness tend to be strong or weak ties, according
 the measure of tie strength we used in Question 2? Does this result make sense given
 the shape of the networks?
 ***
+```{r}
+# social network betweeness and strength comparisons 
+setorder(btw_social_dt, 'edge number')
+social_edges <- as.data.table(cbind(btw_social_dt,attr(E(network_social),'vnames')))
+colnames(social_edges) <- c('edge number', 'betweenness','vertices')
+social_edges$ego <- as.integer(sub('\\|\\d*$','',social_edges$vertices))
+social_edges$alter <- as.integer(sub('\\d*\\|', '', social_edges$vertices))
+social_edges <- subset(social_edges, select=-vertices)
+setorder(social_edges, 'ego')
+social_edges_ties <- social_edges %>% left_join(stc_df)
+setorder(social_edges_ties,-'betweenness')
+social_edges_ties
+```
+```{r}
+setorder(btw_task_dt, 'edge number')
+task_edges <- as.data.table(cbind(btw_task_dt,attr(E(network_task),'vnames')))
+colnames(task_edges) <- c('edge number', 'betweenness','vertices')
+task_edges$ego <- as.integer(sub('\\|\\d*$','',task_edges$vertices))
+task_edges$alter <- as.integer(sub('\\d*\\|', '', task_edges$vertices))
+task_edges <- subset(task_edges, select=-vertices)
+setorder(task_edges, 'ego')
+task_edges_ties <- task_edges %>% left_join(stc_df)
+setorder(task_edges_ties,-'betweenness')
+task_edges_ties
+```
+
+***
+3(B) Commentary: Looking at these networks, our most between edges had socially weak ties, but task strong ties. This appears to connect to the structure of our network, where strong social ties are largely focused on a very gregarious vertex, leaving most of the network bridged by weak ties, while strong task ties are more dispersed.
 ***
 4. Continue to treat the social and task ties as two distinct types of ties comprising one network.
 How many pairs of nodes do not have walks between one another? Find a solution that
@@ -127,6 +233,20 @@ performs this calculation directly on the matrix—it is possible to verify this
 igraph afterward using distances(). See also ?distances() for an explanation of igraph’s
 related network distance functions.
 ***
+```{r}
+
+adj_matrix <- as_adjacency_matrix(full_network)
+adj_matrix <- as.matrix(adj_matrix)
+max_walk <-  adj_matrix %^% 56
+no_walk_number <- 0
+for (i in 1:21){
+  no_walk_number <- no_walk_number+sum(max_walk[i,]==0)
+}
+
+paste(no_walk_number,'pairs have no walk between them')
+
+```
+
 ***
 5. The network-level measure of degree centrality is a good indicator of the dispersion of the
 degree distribution in a network. Generate and plot a network in R in which the network-level
