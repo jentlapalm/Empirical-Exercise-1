@@ -13,6 +13,7 @@ library(randtests)
 library(stringr)
 library(Matrix)
 library(expm)
+library(tidyverse)
 
 path <- "https://raw.githubusercontent.com/jentlapalm/Empirical-Exercise-1/main/social_and_task_network.csv"
 data = fread(path, header = TRUE)
@@ -106,7 +107,7 @@ The highest correlated metric between both networks is betweenness. This suggest
 ***
 2. Next, consider the social and task ties together, as two distinct types of ties comprising
 one network. Suppose that a tie is strong if it is above the mean strength for that type,
-conditional on the tie existing—that is, do not include weights of 0 in the calculation of the
+conditional on the tie existingâthat is, do not include weights of 0 in the calculation of the
 mean.
 (A) Under this definition, does the network satisfy Strong Triadic Closure? Come up with
 a solution that illustrates this visually, in a plot.
@@ -229,8 +230,8 @@ task_edges_ties
 ***
 4. Continue to treat the social and task ties as two distinct types of ties comprising one network.
 How many pairs of nodes do not have walks between one another? Find a solution that
-performs this calculation directly on the matrix—it is possible to verify this solution via
-igraph afterward using distances(). See also ?distances() for an explanation of igraph’s
+performs this calculation directly on the matrixâit is possible to verify this solution via
+igraph afterward using distances(). See also ?distances() for an explanation of igraphâs
 related network distance functions.
 ***
 ```{r}
@@ -252,7 +253,7 @@ paste(no_walk_number,'pairs have no walk between them')
 degree distribution in a network. Generate and plot a network in R in which the network-level
 measure of degree centrality,
 
-Cdegree =∑Cdegree(v^∗)−Cdegree(vi)/(n−1)(n−2)
+Cdegree =âCdegree(v^â)âCdegree(vi)/(nâ1)(nâ2)
 
 is equal to 1, and another where it is equal to 0. Would this relationship hold true for these
 networks for other measures of centrality, such as closeness or betweenness?
@@ -299,4 +300,29 @@ net_deg_centr
 zero_mat_graph <- graph_from_adjacency_matrix(zero_mat)
 plot(zero_mat_graph)
 ```
+***
+Checking closeness and betweenness for the Zer and One network-level degree centrality networks
+***
+```{r, warning=FALSE, message=FALSE}
+#measures for One network-level degree centrality
 
+closeness(one_mat_graph) #closeness
+
+betweenness(one_mat_graph) #betweenness
+
+#measures for Zero network-level degree centrality
+
+closeness(zero_mat_graph)
+
+betweenness(zero_mat_graph)
+
+```
+***
+5. Commentary:
+'One' Network commentary:
+igraph's closeness and betweenness functions appear to have some limitations. Node 5 in the One network should have a closeness of zero or DNE: it is isolated. Unsurprisingly, node 1 has the highest closeness, as it is connected to all-but-one of the network's nodes. The isolated node appears to be giving us the betweenness score of zero.
+
+'Zero' Network commentary:
+igraph's closeness function appears to have some limitations, Here, closeness should be zero for all members because the network is entirely isolated. Unsurprisingly, betweeenness is zero.
+
+***
